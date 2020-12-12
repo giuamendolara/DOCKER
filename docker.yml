@@ -1,0 +1,68 @@
+--- 
+- name:
+  hosts: 192.168.1.108
+  vars_prompt:
+  - name: container_name
+    private: no
+    prompt: "Enter the Docker Container Name: "
+  - name: host_port
+    private: no
+    prompt: "Enter the port number that will be bound to the docker's port from the Host machine: "
+  
+  tasks:
+  - name: "Configure Yum repo for Docker"
+    yum_repository:
+      name: docker
+      description: "Repository for Docker-ce Software"
+      baseurl: "https://download.docker.com/linux/centos/7/x86_64/stable/"
+      gpgcheck: no
+            
+  - name: "INSTALL REPO"
+    command:
+      cmd: "dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo"
+  
+  - name: "Uninstall PODMAN & BUILDAH"
+    command:
+      cmd: "yum erase podman buildah -y"
+ 
+  - name: "Installing Docker-ce"
+    command:
+      cmd: "yum install docker-ce --nobest -y"
+      warn: false
+
+  - name: "Start & Enable Docker engine"
+    service:
+      name: "docker"
+      state: started
+      enabled: yes
+
+  - name: "Install docker-py package - compulsory"
+    pip:
+      name: "docker-py"
+      state: present
+
+  - name: "PULL Httpd Image from the HUB"
+    community.general.docker_image:
+      name: "httpd"
+      source: pull
+
+  - name: "Run Docker Container and bind the host' port to the docker's port"
+    community.general.docker_container:
+      name: "{{ container_name }}"
+      image: "httpd"
+      state: started
+      container_default_behavior: "compatibility"
+      ports: "{{ host_port }}:80"
+
+  - name: "Copy Webpage index.html to the Host"
+    copy:
+      src: "/ANSIBLE/DOCKER/index.html"
+      dest: "/index.html"
+
+  - name: "Copy the index.html from Host to Docker"
+    command:
+      cmd: "docker cp /index.html {{ container_name }}:/usr/local/apache2/htdocs/"
+
+  - name: "Please open the following URL to access the Web Server page: "
+    debug:
+      msg: "http://{{ ansible_facts.default_ipv4.address }}:{{ host_port }}/"
